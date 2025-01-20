@@ -9,8 +9,6 @@ public class BoardTile : MonoBehaviour
     public int index;
     public Color OriginalColor;
 
-    private int currentYRotation;
-
     private void FixedUpdate()
     {
         if(index==-1)
@@ -22,15 +20,9 @@ public class BoardTile : MonoBehaviour
             Destroy(gameObject);
             return;
         }
-        currentYRotation += 4;
-        if(!gameController.ShouldSpin(index))
-        {
-            currentYRotation = 0;
-        }
-        pieceSpriteRenderer.transform.rotation = gameController.GetRotation(index, currentYRotation);
-        pieceSpriteRenderer.sprite = gameController.GetSprite(index, currentYRotation);
+        pieceSpriteRenderer.sprite = gameController.GetSprite(index);
         pieceSpriteRenderer.enabled = true;
-        pieceSpriteRenderer.color=gameController.GetSpriteColor(index, currentYRotation);
+        pieceSpriteRenderer.color=gameController.GetSpriteColor(index);
         tileSpriteRenderer.enabled = index < 1000;
         moveIndicatorSpriteRenderer.enabled = index < 1000 && gameController.IsPossibleMove(index);
         if (gameController.board.kingInDanger && index<1000 && gameController.board[index].type==PieceType.King && gameController.board[index].color==gameController.Turn)

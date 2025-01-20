@@ -15,8 +15,7 @@ public enum PieceType
     King,
     Miner,
     TemporaryQueen,
-    Dodo,
-    Fusion
+    Dodo
 }
 
 public enum ColorOfPiece
@@ -94,13 +93,13 @@ public class GameController : MonoBehaviour
         SetupBoard();
     }
 
-    public Sprite GetSprite(int index, int currentYRotation)
+    public Sprite GetSprite(int index)
     {
         if (index >= 1000)
         {
             return Turn == ColorOfPiece.White ? whiteSprites[index - 998] : blackSprites[index - 998];
         }
-        return ShouldSpin(index) ? GetSprite(board[index][( (currentYRotation+90) / 180) % board[index].Count]): GetSprite(board[index]);
+        return GetSprite(board[index]);
     }
 
     public Sprite GetSprite(Piece piece)
@@ -112,13 +111,13 @@ public class GameController : MonoBehaviour
         return piece.color == 0 || piece.poweredUp ? whiteSprites[(int) piece.type] : blackSprites[(int) piece.type];
     }
 
-    public Color GetSpriteColor(int index, int currentYRotation)
+    public Color GetSpriteColor(int index)
     {
         if (index >= 1000)
         {
             return Color.white;
         }
-        return ShouldSpin(index) ? GetSpriteColor(board[index][(currentYRotation / 180) % board[index].Count]) : GetSpriteColor(board[index]);
+        return GetSpriteColor(board[index]);
     }
 
     public Color GetSpriteColor(Piece piece)
@@ -145,7 +144,7 @@ public class GameController : MonoBehaviour
         {
             if(quitting)
             {
-                if(Time.time-timeFromLastPressingR>3f)
+                if(Time.time-timeFromLastPressingR>1f)
                 {
                     SceneManager.LoadScene("Chess");
                 }
@@ -166,20 +165,6 @@ public class GameController : MonoBehaviour
     public void PlaySound()
     {
         audioSource.Play();
-    }
-
-    public Quaternion GetRotation(int index, int currentYRotation)
-    {
-        if (!ShouldSpin(index))
-        {
-            return Quaternion.Euler(0,0,0);
-        }
-        return Quaternion.Euler(0, currentYRotation, 0);
-    }
-
-    public bool ShouldSpin(int index)
-    {
-        return !(board[index].fusion.Count == 0 && board.indexOfWhiteFusion != index && board.indexOfBlackFusion != index);
     }
 
     public void SetupBoard()
@@ -299,32 +284,6 @@ public class GameController : MonoBehaviour
             allTransforms.Add(o.transform);
         }
 
-        {
-            GameObject o = Instantiate(baseTile);
-            o.transform.position = new(-5.5f * scale, -1.5f * scale, 0);
-            Color color = whiteTile;
-            o.GetComponent<SpriteRenderer>().color = color;
-            BoardTile tile = o.GetComponent<BoardTile>();
-            board[70] = new Piece(ColorOfPiece.White, PieceType.Fusion);
-            tile.index = 70;
-            tile.gameController = this;
-            tile.OriginalColor = color;
-            allTransforms.Add(o.transform);
-        }
-
-        {
-            GameObject o = Instantiate(baseTile);
-            o.transform.position = new(5.5f * scale, 1.5f * scale, 0);
-            Color color = blackTile;
-            o.GetComponent<SpriteRenderer>().color = color;
-            BoardTile tile = o.GetComponent<BoardTile>();
-            board[71] = new Piece(ColorOfPiece.Black, PieceType.Fusion);
-            tile.index = 71;
-            tile.gameController = this;
-            tile.OriginalColor = color;
-            allTransforms.Add(o.transform);
-        }
-
     }
 
     void FixedUpdate()
@@ -393,7 +352,7 @@ public class GameController : MonoBehaviour
         {
             return;
         }
-        if (!board[index].Empty() && board[index].type!=PieceType.Fusion && board[index].color==Turn && !(board[index].type == PieceType.King && possibleMovesSource != -1 && board[possibleMovesSource].ContainsPoweredUp(PieceType.Rook)))
+        if (!board[index].Empty() && board[index].color==Turn && !(board[index].type == PieceType.King && possibleMovesSource != -1 && board[possibleMovesSource].type==PieceType.Rook && board[possibleMovesSource].poweredUp))
         {
             possibleMoves = board.GetPossibleMoves(board[index], index);
             possibleMovesSource = index;
@@ -444,22 +403,7 @@ public class Piece
     public bool moved;
     public bool poweredUp;
     public bool egg;
-    public List<Piece> fusion;
-    public int Count 
-    { 
-        get
-        {
-            return fusion.Count + 1;
-        } 
-    }
 
-    public Piece this[int index]
-    {
-        get
-        {
-            return index==0 ? new Piece(color, type, moved, poweredUp, egg): fusion[index-1];
-        }
-    }
 
     public Piece(ColorOfPiece color, PieceType type, bool moved=false, bool poweredUp=false, bool egg=false)
     {
@@ -468,7 +412,6 @@ public class Piece
         this.moved = moved;
         this.poweredUp = poweredUp;
         this.egg = egg;
-        this.fusion = new();
     }
 
     public Piece(Piece piece)
@@ -478,11 +421,6 @@ public class Piece
         moved = piece.moved;
         poweredUp = piece.poweredUp;
         egg = piece.egg;
-        this.fusion = new();
-        foreach(Piece fusionPiece in piece.fusion)
-        {
-            this.fusion.Add(new(fusionPiece));
-        }
     }
 
     public bool Empty()
@@ -528,75 +466,15 @@ public class Piece
                 currentValue = 0;
                 break;
         }
-        currentValue = poweredUp ? currentValue * 1.5f : currentValue;
-        foreach(Piece piece in fusion)
-        {
-            currentValue += piece.Value();
-        }
 
-        return currentValue;
-    }
-
-    public float ValueWithoutPoweredUpPieces()
-    {
-        float result = poweredUp ? 0 : new Piece(color, type, moved, poweredUp, egg).Value();
-        foreach(Piece piece in fusion)
-        {
-            result += piece.ValueWithoutPoweredUpPieces();
-        }
-        return result;
-    }
-
-    public bool ContainsType(PieceType type)
-    {
-        if(type==this.type)
-        {
-            return true;
-        }
-        foreach(Piece piece in fusion)
-        {
-            if(piece.ContainsType(type))
-            {
-                return true;
-            }
-        }
-        return false;
+        return poweredUp ? currentValue * 1.5f : currentValue;
     }
 
     public void PowerUp()
     {
         poweredUp = true;
-        for(int i=0;i<fusion.Count;i++)
-        {
-            fusion[i].PowerUp();
-        }
     }
 
-    public void Fuse(Piece piece)
-    {
-        foreach(Piece p in piece.fusion)
-        {
-            fusion.Add(p);
-        }
-        piece.fusion = new();
-        fusion.Add(piece);
-    }
-
-    public bool ContainsPoweredUp(PieceType type)
-    {
-        if(poweredUp && this.type== type)
-        {
-            return true;
-        }
-        foreach(Piece piece in fusion)
-        {
-            if(piece.ContainsPoweredUp(type))
-            {
-                return true;
-            }
-        }
-        return false;
-    }
 }
 
 public struct Move
@@ -631,8 +509,6 @@ public class Board
     public Move lastMove;
     public bool kingInDanger;
     public GameController controller;
-    public int indexOfWhiteFusion;
-    public int indexOfBlackFusion;
 
     public static Vector2[] knightMoves = new Vector2[]
     {
@@ -668,9 +544,7 @@ public class Board
 
     public Board()
     {
-        tiles = new Piece[72];
-        indexOfBlackFusion = -1;
-        indexOfWhiteFusion = -1;
+        tiles = new Piece[70];
     }
 
     public Board(Board board)
@@ -684,8 +558,6 @@ public class Board
         blackPowerUp = board.blackPowerUp;
         turn = board.turn;
         lastMove = new Move(board.lastMove);
-        indexOfWhiteFusion = board.indexOfWhiteFusion;
-        indexOfBlackFusion = board.indexOfBlackFusion;
         controller = null;
     }
 
@@ -712,12 +584,12 @@ public class Board
             capturedPiece = GameController.emptyPiece;
             if(turn==ColorOfPiece.White)
             {
-                whitePowerUp -= tiles[move.prevTile].ValueWithoutPoweredUpPieces();
+                whitePowerUp -= tiles[move.prevTile].Value();
                 tiles[move.prevTile].PowerUp();
             }
             else
             {
-                blackPowerUp -= tiles[move.prevTile].ValueWithoutPoweredUpPieces();
+                blackPowerUp -= tiles[move.prevTile].Value();
                 tiles[move.prevTile].PowerUp();
             }
         }
@@ -734,57 +606,9 @@ public class Board
             tiles[move.currTile] = new Piece(turn, PieceType.Pawn, false, tiles[move.prevTile].poweredUp, true);
             capturedPiece = GameController.emptyPiece;
         }
-        else if(move.currTile==70+(int) turn)
-        {
-            capturedPiece = GameController.emptyPiece;
-            if(turn == ColorOfPiece.White)
-            {
-                if(indexOfWhiteFusion==-1)
-                {
-                    indexOfWhiteFusion = move.prevTile;
-                }
-                else
-                {
-                    whitePowerUp -= AverageValue(tiles[indexOfWhiteFusion], tiles[move.prevTile]);
-                    if(tiles[move.prevTile].type==PieceType.Miner)
-                    {
-                        tiles[move.prevTile].Fuse(tiles[indexOfWhiteFusion]);
-                        tiles[indexOfWhiteFusion] = new(tiles[move.prevTile]);
-                    }
-                    else
-                    {
-                        tiles[indexOfWhiteFusion].Fuse(tiles[move.prevTile]);
-                    }
-                    tiles[move.prevTile] = GameController.emptyPiece;
-                    indexOfWhiteFusion = -1;
-                }
-            }
-            else
-            {
-                if (indexOfBlackFusion == -1)
-                {
-                    indexOfBlackFusion = move.prevTile;
-                }
-                else
-                {
-                    blackPowerUp -= AverageValue(tiles[indexOfBlackFusion], tiles[move.prevTile]);
-                    if (tiles[move.prevTile].type == PieceType.Miner)
-                    {
-                        tiles[move.prevTile].Fuse(tiles[indexOfBlackFusion]);
-                        tiles[indexOfBlackFusion] = new(tiles[move.prevTile]);
-                    }
-                    else
-                    {
-                        tiles[indexOfBlackFusion].Fuse(tiles[move.prevTile]);
-                    }
-                    tiles[move.prevTile]=GameController.emptyPiece;
-                    indexOfBlackFusion = -1;
-                }
-            }
-        }
         else
         {
-            if (tiles[move.currTile].color == tiles[move.prevTile].color && tiles[move.currTile].type == PieceType.King && tiles[move.prevTile].ContainsType(PieceType.Rook))
+            if (tiles[move.currTile].color == tiles[move.prevTile].color && tiles[move.currTile].type == PieceType.King && tiles[move.prevTile].type==(PieceType.Rook) && tiles[move.prevTile].poweredUp)
             {
                 capturedPiece = GameController.emptyPiece;
                 Piece temp = tiles[move.currTile];
@@ -847,18 +671,6 @@ public class Board
                 }
             }
         }
-
-        if(move.currTile!=70+(int)turn)
-        {
-            if (turn==ColorOfPiece.White)
-            {
-                indexOfWhiteFusion = -1;
-            }
-            else
-            {
-                indexOfBlackFusion = -1;
-            }
-        }
         
         for(int i=0;i<tiles.Length; i++)
         {
@@ -869,7 +681,7 @@ public class Board
             }
         }
 
-        if (tiles[move.currTile].ContainsPoweredUp(PieceType.Queen) && move.prevTile<64)
+        if (tiles[move.currTile].type==PieceType.Queen && tiles[move.currTile].poweredUp && move.prevTile<64)
         {
             Piece piece = new Piece(turn, PieceType.TemporaryQueen, true);
             tiles[move.prevTile]=piece;
@@ -923,10 +735,6 @@ public class Board
     public List<int> GetPossibleMoves(Piece piece, int index, bool eliminateMovesThatHangsTheKing=true, bool includeTakeableTilesToo=false)
     {
         List<int> result = new();
-        foreach(Piece fusionPiece in piece.fusion)
-        {
-            result.AddRange(GetPossibleMoves(fusionPiece, index, false, includeTakeableTilesToo));
-        }
         Vector2 position=GetVectorFromIndex(index);
         Vector2 positionForTesting;
         Vector2 moveDirection;
@@ -1148,60 +956,21 @@ public class Board
         
         if(turn==ColorOfPiece.White)
         {
-            if(whitePowerUp>=piece.ValueWithoutPoweredUpPieces() && piece.type != PieceType.TemporaryQueen && piece.ValueWithoutPoweredUpPieces() != 0)
+            if(whitePowerUp>=piece.Value() && piece.type != PieceType.TemporaryQueen && !piece.poweredUp)
             {
                 result.Add(66);
             }
         }
         else
         {
-            if (blackPowerUp >= piece.ValueWithoutPoweredUpPieces() && piece.type != PieceType.TemporaryQueen && piece.ValueWithoutPoweredUpPieces() != 0)
+            if (blackPowerUp >= piece.Value() && piece.type != PieceType.TemporaryQueen && !piece.poweredUp)
             {
                 result.Add(67);
             }
         }
 
-        
-        
-        if(piece.color==ColorOfPiece.White)
-        {
-            if(indexOfWhiteFusion==-1 || AverageValue(tiles[indexOfWhiteFusion], piece)<=whitePowerUp)
-            {
-                result.Add(70);
-            }
-        }
-        else
-        {
-            if (indexOfBlackFusion == -1 || AverageValue(tiles[indexOfBlackFusion], piece) <= blackPowerUp)
-            {
-                result.Add(71);
-            }
-        }
-            
-        
-        if(piece.type == PieceType.TemporaryQueen || piece.type == PieceType.King || piece.type == PieceType.Dodo || piece.type == PieceType.Pawn || index == indexOfWhiteFusion || index == indexOfBlackFusion)
-        {
-            while (result.Contains(70+(int)piece.color))
-            {
-                if (piece.color == ColorOfPiece.White)
-                {
-                    if (indexOfWhiteFusion == -1 || AverageValue(tiles[indexOfWhiteFusion], piece) <= whitePowerUp)
-                    {
-                        result.Remove(70);
-                    }
-                }
-                else
-                {
-                    if (indexOfBlackFusion == -1 || AverageValue(tiles[indexOfBlackFusion], piece) <= blackPowerUp)
-                    {
-                        result.Remove(71);
-                    }
-                }
-            }
-        }
 
-
-        if(piece.ValueWithoutPoweredUpPieces()==0 || (piece.color==ColorOfPiece.White && whitePowerUp < piece.ValueWithoutPoweredUpPieces()) || (piece.color == ColorOfPiece.Black && blackPowerUp < piece.ValueWithoutPoweredUpPieces()))
+        if((piece.color==ColorOfPiece.White && whitePowerUp < piece.Value()) || (piece.color == ColorOfPiece.Black && blackPowerUp < piece.Value()) || piece.poweredUp)
         {
             while(result.Contains(66))
             {
