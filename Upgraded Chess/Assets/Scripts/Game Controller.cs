@@ -58,6 +58,7 @@ public class GameController : MonoBehaviour
     [SerializeField] private GameObject mainCanvas;
     [SerializeField] private GameObject helpCanvas;
     [SerializeField] private Button helpButton;
+    [SerializeField] private Button backButton;
 
     public static Piece emptyPiece = new(ColorOfPiece.White, PieceType.None, true);
     public static Color whiteTile = new(238 / 255f, 238 / 255f, 210 / 255f);
@@ -101,6 +102,11 @@ public class GameController : MonoBehaviour
         {
             mainCanvas.SetActive(false);
             helpCanvas.SetActive(true);
+        });
+        backButton.onClick.AddListener(() =>
+        {
+            mainCanvas.SetActive(true);
+            helpCanvas.SetActive(false);
         });
     }
 
@@ -906,7 +912,7 @@ public class Board
                     }
                 }
                 int pawnIndex = piece.color == ColorOfPiece.White ? 52 : 12;
-                if(!piece.moved && tiles[pawnIndex].type == PieceType.Pawn && !tiles[pawnIndex].egg)
+                if(!piece.moved && tiles[pawnIndex].type == PieceType.Pawn && !tiles[pawnIndex].egg && !tiles[pawnIndex].moved)
                 {
                     result.Add(pawnIndex);
                 }
