@@ -2,7 +2,9 @@ using System;
 using System.Collections.Generic;
 using TMPro;
 using UnityEngine;
+using UnityEngine.EventSystems;
 using UnityEngine.SceneManagement;
+using UnityEngine.UI;
 
 public enum PieceType
 {
@@ -53,7 +55,9 @@ public class GameController : MonoBehaviour
     [SerializeField] private SpriteRenderer blackBox;
     [SerializeField] private TextMeshProUGUI text;
     [SerializeField] private TextMeshProUGUI[] powerUpTexts;
-    [SerializeField] private AudioSource audioSource;
+    [SerializeField] private GameObject mainCanvas;
+    [SerializeField] private GameObject helpCanvas;
+    [SerializeField] private Button helpButton;
 
     public static Piece emptyPiece = new(ColorOfPiece.White, PieceType.None, true);
     public static Color whiteTile = new(238 / 255f, 238 / 255f, 210 / 255f);
@@ -91,6 +95,13 @@ public class GameController : MonoBehaviour
     void Start()
     {
         SetupBoard();
+        mainCanvas.SetActive(true);
+        helpCanvas.SetActive(false);
+        helpButton.onClick.AddListener(() =>
+        {
+            mainCanvas.SetActive(false);
+            helpCanvas.SetActive(true);
+        });
     }
 
     public Sprite GetSprite(int index)
@@ -131,7 +142,9 @@ public class GameController : MonoBehaviour
 
     public void Update()
     {
-        if(Input.GetKeyDown(KeyCode.Space))
+        EventSystem.current.SetSelectedGameObject(null);
+
+        if (Input.GetKeyDown(KeyCode.Space))
         {
             scale *= -1;
             foreach (Transform transform in allTransforms)
@@ -160,11 +173,12 @@ public class GameController : MonoBehaviour
         {
             quitting = false;
         }
-    }
 
-    public void PlaySound()
-    {
-        audioSource.Play();
+        if(Input.GetKey(KeyCode.Escape))
+        {
+            mainCanvas.SetActive(true);
+            helpCanvas.SetActive(false);
+        }
     }
 
     public void SetupBoard()
@@ -352,7 +366,7 @@ public class GameController : MonoBehaviour
         {
             return;
         }
-        if (!board[index].Empty() && board[index].color==Turn && !(board[index].type == PieceType.King && possibleMovesSource != -1 && board[possibleMovesSource].type==PieceType.Rook && board[possibleMovesSource].poweredUp))
+        if (!board[index].Empty() && board[index].color==Turn && !(board[index].type == PieceType.King && possibleMovesSource != -1 && board[possibleMovesSource].type==PieceType.Rook && board[possibleMovesSource].poweredUp) && !(possibleMovesSource != -1 &&board[possibleMovesSource].type == PieceType.King && board[index].type == PieceType.Pawn))
         {
             possibleMoves = board.GetPossibleMoves(board[index], index);
             possibleMovesSource = index;
@@ -394,6 +408,8 @@ public class GameController : MonoBehaviour
 
         return possibleMoves.Contains(index);
     }
+
+
 }
 
 public class Piece
@@ -706,8 +722,13 @@ public class Board
         if (turn == ColorOfPiece.White)
         {
             whitePowerUp += capturedPiece.Value() * 0.75f;
-            blackPowerUp += 0.1f;
             blackPowerUp += capturedPiece.Value() * 0.25f;
+            if(capturedPiece.color==ColorOfPiece.Black)
+            {
+                whitePowerUp -= capturedPiece.Value() * 0.75f;
+                blackPowerUp += capturedPiece.Value() * 0.75f;
+            }
+            blackPowerUp += 0.1f;
             if(kingInDanger)
             {
                 blackPowerUp += 0.1f;
@@ -717,8 +738,14 @@ public class Board
         else
         {
             blackPowerUp += capturedPiece.Value() * 0.75f;
-            whitePowerUp += 0.1f;
             whitePowerUp += capturedPiece.Value() * 0.25f;
+            if (capturedPiece.color == ColorOfPiece.White)
+            {
+                blackPowerUp -= capturedPiece.Value() * 0.75f;
+                whitePowerUp += capturedPiece.Value() * 0.75f;
+            }
+            whitePowerUp += 0.1f;
+
             if (kingInDanger)
             {
                 blackPowerUp += 0.3f;
@@ -877,6 +904,11 @@ public class Board
                     {
                         result.Add(GetIndexFromVector(new Vector2(2, position.y)));
                     }
+                }
+                int pawnIndex = piece.color == ColorOfPiece.White ? 52 : 12;
+                if(!piece.moved && tiles[pawnIndex].type == PieceType.Pawn && !tiles[pawnIndex].egg)
+                {
+                    result.Add(pawnIndex);
                 }
                 break;
 
