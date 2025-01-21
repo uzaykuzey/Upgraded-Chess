@@ -59,6 +59,7 @@ public class GameController : MonoBehaviour
     [SerializeField] private GameObject helpCanvas;
     [SerializeField] private Button helpButton;
     [SerializeField] private Button backButton;
+    [SerializeField] private Button restartButton;
 
     public static Piece emptyPiece = new(ColorOfPiece.White, PieceType.None, true);
     public static Color whiteTile = new(238 / 255f, 238 / 255f, 210 / 255f);
@@ -107,6 +108,10 @@ public class GameController : MonoBehaviour
         {
             mainCanvas.SetActive(true);
             helpCanvas.SetActive(false);
+        });
+        restartButton.onClick.AddListener(() =>
+        {
+            SceneManager.LoadScene("Chess");
         });
     }
 
@@ -312,18 +317,22 @@ public class GameController : MonoBehaviour
         {
             case GameState.Draw:
                 blackBox.enabled = true;
+                restartButton.gameObject.SetActive(true);
                 text.text = "Draw";
                 break;
             case GameState.BlackWin:
                 blackBox.enabled = true;
+                restartButton.gameObject.SetActive(true);
                 text.text = "Black Wins!";
                 break;
             case GameState.WhiteWin:
                 blackBox.enabled = true;
+                restartButton.gameObject.SetActive(true);
                 text.text = "White Wins!";
                 break;
             default:
                 blackBox.enabled = false;
+                restartButton.gameObject.SetActive(false);
                 text.text = "";
                 break;
         }
