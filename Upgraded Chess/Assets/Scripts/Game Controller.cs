@@ -78,7 +78,7 @@ public class GameController : MonoBehaviour
     private bool quitting;
     private float timeFromLastPressingR;
 
-
+    private Dictionary<PieceType, BoardTile> promotionSquares;
 
     public ColorOfPiece Turn
     { 
@@ -309,6 +309,20 @@ public class GameController : MonoBehaviour
             allTransforms.Add(o.transform);
         }
 
+        //promotionSquares = new Dictionary<PieceType, BoardTile>();
+        //foreach (var t in new PieceType[] { PieceType.Miner, PieceType.Knight, PieceType.Bishop, PieceType.Rook, PieceType.Queen })
+        //{
+        //    GameObject o = Instantiate(baseTile);
+        //    o.transform.position = new(0, 0, 0);
+        //    Color color = blackTile;
+        //    o.GetComponent<SpriteRenderer>().enabled = false;
+        //    BoardTile tile = o.GetComponent<BoardTile>();
+        //    tile.index = 1000;
+        //    tile.gameController = this;
+        //    tile.OriginalColor = color;
+        //    allTransforms.Add(o.transform);
+        //    promotionSquares.Add(t, tile);
+        //}
     }
 
     void FixedUpdate()
@@ -388,7 +402,7 @@ public class GameController : MonoBehaviour
         }
         else
         {
-            if(possibleMoves!=null && possibleMoves.Contains(index))
+            if(IsPossibleMove(index))
             {
                 if(board[possibleMovesSource].type == PieceType.Pawn && (index / 8) % 7==0)
                 {
@@ -423,8 +437,6 @@ public class GameController : MonoBehaviour
 
         return possibleMoves.Contains(index);
     }
-
-
 }
 
 public class Piece
@@ -491,7 +503,7 @@ public class Piece
                 currentValue = 10;
                 break;
             case PieceType.Dodo:
-                currentValue = 4;
+                currentValue = 9;
                 break;
             default:
                 currentValue = 0;
@@ -540,11 +552,12 @@ public class Board
     public Move lastMove;
     public bool kingInDanger;
     public GameController controller;
+    public bool firstMovesMade;
 
     public static Vector2[] knightMoves = new Vector2[]
     {
-    new Vector2(2, 1), new Vector2(2, -1), new Vector2(-2, 1), new Vector2(-2, -1),
-    new Vector2(1, 2), new Vector2(1, -2), new Vector2(-1, 2), new Vector2(-1, -2)
+        new Vector2(2, 1), new Vector2(2, -1), new Vector2(-2, 1), new Vector2(-2, -1),
+        new Vector2(1, 2), new Vector2(1, -2), new Vector2(-1, 2), new Vector2(-1, -2)
     };
 
 
@@ -589,6 +602,7 @@ public class Board
         blackPowerUp = board.blackPowerUp;
         turn = board.turn;
         lastMove = new Move(board.lastMove);
+        firstMovesMade = board.firstMovesMade;
         controller = null;
     }
 
@@ -749,6 +763,7 @@ public class Board
                 blackPowerUp += 0.1f;
                 whitePowerUp += 0.3f;
             }
+            firstMovesMade = true;
         }
         else
         {
@@ -921,7 +936,7 @@ public class Board
                     }
                 }
                 int pawnIndex = piece.color == ColorOfPiece.White ? 52 : 12;
-                if(!piece.moved && tiles[pawnIndex].type == PieceType.Pawn && !tiles[pawnIndex].egg && !tiles[pawnIndex].moved)
+                if(!firstMovesMade)
                 {
                     result.Add(pawnIndex);
                 }
@@ -952,7 +967,7 @@ public class Board
                     for (int i = 0; i < 4; i++)
                     {
                         moveDirection = new Vector2((1 - i / 2) * (i % 2 == 0 ? 1 : -1), i / 2 * (i % 2 == 0 ? 1 : -1));
-                        positionForTesting = moveDirection*2 + position;
+                        positionForTesting = moveDirection * 2 + position;
                         if ((LegalVector(positionForTesting) && (this[positionForTesting].Empty() || this[positionForTesting].color != piece.color)))
                         {
                             result.Add(GetIndexFromVector(positionForTesting));
@@ -1147,7 +1162,7 @@ public class Board
 
     public float EggThresholdCalculator(ColorOfPiece color)
     {
-        return 1;
+        return 1.5f;
         /*float threshold = CalculateAllThePieceValues(color) - tiles[IndexOfKing(color)].Value() - tiles[68 + (int) color].Value();
         return 7.5f / (1f + 6.5f * Mathf.Exp(-(threshold-1f) / 3f)) - 0.1f;*/
     }
