@@ -426,6 +426,7 @@ public class GameController : MonoBehaviour
             possibleMoves = null;
             possibleMovesSource = -1;
         }
+
     }
 
     public bool IsPossibleMove(int index)
@@ -543,6 +544,13 @@ public struct Move
     }
 }
 
+public enum MinerSituation
+{
+    NotUpgraded,
+    UpgradedAlive,
+    UpgradedDead
+}
+
 public class Board
 {
     public Piece[] tiles;
@@ -553,6 +561,10 @@ public class Board
     public bool kingInDanger;
     public GameController controller;
     public bool firstMovesMade;
+    public float dodosByWhite;
+    public float dodosByBlack;
+
+    public MinerSituation[] minerSituations;
 
     public static Vector2[] knightMoves = new Vector2[]
     {
@@ -589,6 +601,7 @@ public class Board
     public Board()
     {
         tiles = new Piece[70];
+        minerSituations = new MinerSituation[] { MinerSituation.NotUpgraded, MinerSituation.NotUpgraded };
     }
 
     public Board(Board board)
@@ -603,6 +616,9 @@ public class Board
         turn = board.turn;
         lastMove = new Move(board.lastMove);
         firstMovesMade = board.firstMovesMade;
+        minerSituations = new MinerSituation[] { board.minerSituations[(int) ColorOfPiece.White], board.minerSituations[(int) ColorOfPiece.Black] };
+        dodosByWhite = board.dodosByWhite;
+        dodosByBlack = board.dodosByBlack;
         controller = null;
     }
 
@@ -637,16 +653,24 @@ public class Board
                 blackPowerUp -= tiles[move.prevTile].Value();
                 tiles[move.prevTile].PowerUp();
             }
+
+            if (tiles[move.prevTile].type == PieceType.Miner)
+            {
+                minerSituations[(int)turn] = MinerSituation.UpgradedAlive;
+            }
         }
         else if (move.prevTile == 68 + (int)turn)
         {
+            float dodoIncrease = this[move.prevTile].poweredUp ? 1 : 0.6f;
             if (turn == ColorOfPiece.White)
             {
                 whitePowerUp -= EggThresholdCalculator(turn);
+                dodosByWhite += dodoIncrease;
             }
             else
             {
                 blackPowerUp -= EggThresholdCalculator(turn);
+                dodosByBlack += dodoIncrease;
             }
             tiles[move.currTile] = new Piece(turn, PieceType.Pawn, false, tiles[move.prevTile].poweredUp, true);
             capturedPiece = GameController.emptyPiece;
@@ -725,6 +749,30 @@ public class Board
                 tiles[i] = GameController.emptyPiece;
             }
         }
+
+        if (minerSituations[(int)turn] == MinerSituation.UpgradedAlive)
+        {
+            bool minerAlive = false;
+            for (int i = 0; i < tiles.Length; i++)
+            {
+                Piece piece = tiles[i];
+                if (piece.color == turn && piece.type == PieceType.Miner)
+                {
+                    minerAlive = true;
+                    break;
+                }
+            }
+            if(!minerAlive)
+            {
+                minerSituations[(int)turn] = MinerSituation.UpgradedDead;
+            }
+        }
+        else if (minerSituations[(int)turn] == MinerSituation.UpgradedDead)
+        {
+            minerSituations[(int)turn] = MinerSituation.UpgradedAlive;
+            this[64 + (int)turn] = new Piece(turn, PieceType.Miner, false, true, false);
+        }
+
 
         if (tiles[move.currTile].type==PieceType.Queen && tiles[move.currTile].poweredUp && move.prevTile<64)
         {
@@ -822,7 +870,7 @@ public class Board
                         result.Add(GetIndexFromVector(position + new Vector2(1, 0)));
                     }
                 }
-                if(piece.poweredUp && LegalVector(positionForTesting) && lastMove.currTile == GetIndexFromVector(position + new Vector2(1, 0)) && tiles[lastMove.currTile].color!=piece.color)
+                if(piece.poweredUp && LegalVector(positionForTesting) && lastMove.currTile == GetIndexFromVector(position + new Vector2(1, 0)) && tiles[lastMove.currTile].color!=piece.color && (this[positionForTesting].CanBeMovedThrough() || this[positionForTesting].color != piece.color))
                 {
                     result.Add(GetIndexFromVector(positionForTesting));
                     if(includeTakeableTilesToo)
@@ -843,7 +891,7 @@ public class Board
                         result.Add(GetIndexFromVector(position + new Vector2(-1, 0)));
                     }
                 }
-                if (piece.poweredUp && LegalVector(positionForTesting) && lastMove.currTile == GetIndexFromVector(position + new Vector2(-1, 0)) && tiles[lastMove.currTile].color != piece.color)
+                if (piece.poweredUp && LegalVector(positionForTesting) && lastMove.currTile == GetIndexFromVector(position + new Vector2(-1, 0)) && tiles[lastMove.currTile].color != piece.color && (this[positionForTesting].CanBeMovedThrough() || this[positionForTesting].color != piece.color))
                 {
                     result.Add(GetIndexFromVector(positionForTesting));
                     if (includeTakeableTilesToo)
@@ -1162,7 +1210,18 @@ public class Board
 
     public float EggThresholdCalculator(ColorOfPiece color)
     {
-        return 1.5f;
+        float dodoCount = color==ColorOfPiece.White ? dodosByWhite: dodosByBlack;
+
+        if(dodoCount <= 4)
+        {
+            return 1;
+        }
+        if(dodoCount <= 10)
+        {
+            return 3;
+        }
+        return 7;
+
         /*float threshold = CalculateAllThePieceValues(color) - tiles[IndexOfKing(color)].Value() - tiles[68 + (int) color].Value();
         return 7.5f / (1f + 6.5f * Mathf.Exp(-(threshold-1f) / 3f)) - 0.1f;*/
     }
