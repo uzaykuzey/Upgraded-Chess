@@ -111,7 +111,7 @@ public class Board
         }
         else if (move.prevTile == 68 + (int)turn)
         {
-            float dodoIncrease = this[move.prevTile].poweredUp ? 1 : 0.6f;
+            float dodoIncrease = this[move.prevTile].poweredUp ? 1 : 0.75f;
             if (turn == ColorOfPiece.White)
             {
                 whitePowerUp -= EggThresholdCalculator(turn);
