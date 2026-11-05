@@ -375,26 +375,12 @@ public class GameController : MonoBehaviour
 
     public void Click(int index)
     {
-        if(gamestate==GameState.Promoting && index>=1000)
+        if(gamestate==GameState.Promoting && Enum.IsDefined(typeof(PromotingTo), index))
         {
-            board.tiles[possibleMovesSource].type = (PieceType)(index - 998);
-            if(board.tiles[possibleMovesSource].poweredUp)
-            {
-                board.tiles[possibleMovesSource].poweredUp = false;
-                if(Turn==ColorOfPiece.White)
-                {
-                    board.whitePowerUp++;
-                }
-                else
-                {
-                    board.blackPowerUp++;
-                }
-            }
-            board.tiles[possibleMovesSource].egg = false;
-            board.MakeMove(new Move(possibleMovesSource, promotionPlace));
+            gamestate = GameState.Playing;
+            board.MakeMove(new Move(possibleMovesSource, promotionPlace, (PieceType)(index - 998)));
             possibleMoves = null;
             possibleMovesSource = -1;
-            gamestate = GameState.Playing;
             return;
         }
         if(gamestate!=GameState.Playing)
@@ -410,7 +396,7 @@ public class GameController : MonoBehaviour
         {
             if(IsPossibleMove(index))
             {
-                if(board[possibleMovesSource].type == PieceType.Pawn && (index / 8) % 7==0)
+                if(board.IsPromotion(new Move(possibleMovesSource, index)))
                 {
                     gamestate = GameState.Promoting;
                     promotionPlace = index;

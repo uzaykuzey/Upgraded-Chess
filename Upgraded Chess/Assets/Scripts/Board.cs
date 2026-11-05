@@ -1,4 +1,5 @@
-﻿using System.Collections.Generic;
+﻿using System;
+using System.Collections.Generic;
 using UnityEngine;
 
 public class Board
@@ -15,6 +16,11 @@ public class Board
     public float dodosByBlack;
 
     public MinerSituation[] minerSituations;
+
+    private static readonly PieceType[] promotionTypes =
+    {
+        PieceType.Miner, PieceType.Knight, PieceType.Bishop, PieceType.Rook, PieceType.Queen
+    };
 
     public static Vector2[] knightMoves = new Vector2[]
     {
@@ -87,8 +93,21 @@ public class Board
         return vector2.x >= 0 && vector2.y >= 0 && vector2.x < 8 && vector2.y < 8;
     }
 
+    public bool IsPromotion(Move move)
+    {
+        return move.currTile >= 0 && move.currTile < 64 &&
+            this[move.prevTile].type == PieceType.Pawn &&
+            move.currTile / 8 == (this[move.prevTile].color == ColorOfPiece.White ? 0 : 7);
+    }
+
     public void MakeMove(Move move)
     {
+        bool promoting = IsPromotion(move);
+        if (promoting ? Array.IndexOf(promotionTypes, move.promotion) < 0 : move.promotion != PieceType.None)
+        {
+            throw new ArgumentException("A promotion move must choose a miner, knight, bishop, rook, or queen; other moves cannot promote.", nameof(move));
+        }
+
         Piece capturedPiece;
         if (move.currTile==66+(int)turn)
         {
@@ -191,6 +210,25 @@ public class Board
             }
         }
         
+        if (promoting)
+        {
+            Piece promotedPiece = tiles[move.currTile];
+            promotedPiece.type = move.promotion;
+            if (promotedPiece.poweredUp)
+            {
+                promotedPiece.poweredUp = false;
+                if (turn == ColorOfPiece.White)
+                {
+                    whitePowerUp++;
+                }
+                else
+                {
+                    blackPowerUp++;
+                }
+            }
+            promotedPiece.egg = false;
+        }
+
         for(int i=0;i<tiles.Length; i++)
         {
             Piece piece = tiles[i];
@@ -312,7 +350,12 @@ public class Board
                 {
                     result.Add(GetIndexFromVector(positionForTesting));
                 }
-                if(!piece.poweredUp && LegalVector(positionForTesting) && this[positionForTesting].Empty() && this[position+new Vector2(1,0)].type==PieceType.Pawn && lastMove.currTile==GetIndexFromVector(position + new Vector2(1, 0)) && position.y == (piece.color==ColorOfPiece.White ? 3: 4))
+                if (!piece.poweredUp && LegalVector(positionForTesting) && this[positionForTesting].Empty() &&
+                    this[position + new Vector2(1, 0)].type == PieceType.Pawn &&
+                    this[position + new Vector2(1, 0)].color != piece.color &&
+                    lastMove.currTile == GetIndexFromVector(position + new Vector2(1, 0)) &&
+                    lastMove.prevTile == lastMove.currTile + (piece.color == ColorOfPiece.White ? -16 : 16) &&
+                    position.y == (piece.color == ColorOfPiece.White ? 3 : 4))
                 {
                     result.Add(GetIndexFromVector(positionForTesting));
                     if (includeTakeableTilesToo)
@@ -333,7 +376,12 @@ public class Board
                 {
                     result.Add(GetIndexFromVector(positionForTesting));
                 }
-                if (!piece.poweredUp && LegalVector(positionForTesting) && this[positionForTesting].Empty() && this[position + new Vector2(-1, 0)].type == PieceType.Pawn && lastMove.currTile == GetIndexFromVector(position + new Vector2(-1, 0)) && position.y == (piece.color == ColorOfPiece.White ? 3 : 4))
+                if (!piece.poweredUp && LegalVector(positionForTesting) && this[positionForTesting].Empty() &&
+                    this[position + new Vector2(-1, 0)].type == PieceType.Pawn &&
+                    this[position + new Vector2(-1, 0)].color != piece.color &&
+                    lastMove.currTile == GetIndexFromVector(position + new Vector2(-1, 0)) &&
+                    lastMove.prevTile == lastMove.currTile + (piece.color == ColorOfPiece.White ? -16 : 16) &&
+                    position.y == (piece.color == ColorOfPiece.White ? 3 : 4))
                 {
                     result.Add(GetIndexFromVector(positionForTesting));
                     if (includeTakeableTilesToo)
@@ -423,12 +471,16 @@ public class Board
                 }
                 if(!piece.moved && !kingInDanger) //Castle
                 {
-                    if (!this[new Vector2(7 ,position.y)].moved && this[new Vector2(5, position.y)].Empty() && this[new Vector2(6, position.y)].Empty())
+                    int kingSideTransit = GetIndexFromVector(new Vector2(5, position.y));
+                    if (!this[new Vector2(7 ,position.y)].moved && this[new Vector2(5, position.y)].Empty() && this[new Vector2(6, position.y)].Empty() &&
+                        !IsKingInDangerAfterMove(index, kingSideTransit, piece.color))
                     {
                         result.Add(GetIndexFromVector(new Vector2(6, position.y)));
                     }
 
-                    if (!this[new Vector2(0, position.y)].moved && this[new Vector2(1, position.y)].Empty() && this[new Vector2(2, position.y)].Empty() && this[new Vector2(3, position.y)].Empty())
+                    int queenSideTransit = GetIndexFromVector(new Vector2(3, position.y));
+                    if (!this[new Vector2(0, position.y)].moved && this[new Vector2(1, position.y)].Empty() && this[new Vector2(2, position.y)].Empty() && this[new Vector2(3, position.y)].Empty() &&
+                        !IsKingInDangerAfterMove(index, queenSideTransit, piece.color))
                     {
                         result.Add(GetIndexFromVector(new Vector2(2, position.y)));
                     }
@@ -577,10 +629,31 @@ public class Board
 
     public bool DoesHangKing(Move move)
     {
+        if (IsPromotion(move) && move.promotion == PieceType.None)
+        {
+            foreach (PieceType promotion in promotionTypes)
+            {
+                if (!DoesHangKing(new Move(move.prevTile, move.currTile, promotion)))
+                {
+                    return false;
+                }
+            }
+            return true;
+        }
+
         Board hypoBoard = new Board(this);
         hypoBoard.MakeMove(move);
 
         return hypoBoard.IsKingInDangerCurrently(turn);
+    }
+
+    private bool IsKingInDangerAfterMove(int from, int to, ColorOfPiece kingColor)
+    {
+        Board hypoBoard = new Board(this);
+        Piece king = new Piece(hypoBoard[from]) { moved = true };
+        hypoBoard[from] = GameController.emptyPiece;
+        hypoBoard[to] = king;
+        return hypoBoard.IsKingInDangerCurrently(kingColor);
     }
 
     public int IndexOfKing(ColorOfPiece kingColor)
