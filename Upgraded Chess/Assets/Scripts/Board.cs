@@ -1,5 +1,7 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.Security.Cryptography;
+using System.Text;
 using UnityEngine;
 
 public class Board
@@ -16,6 +18,8 @@ public class Board
     public float dodosByBlack;
 
     public MinerSituation[] minerSituations;
+
+    private readonly Dictionary<string, int> positionOccurrences = new();
 
     private static readonly PieceType[] promotionTypes =
     {
@@ -106,6 +110,12 @@ public class Board
         if (promoting ? Array.IndexOf(promotionTypes, move.promotion) < 0 : move.promotion != PieceType.None)
         {
             throw new ArgumentException("A promotion move must choose a miner, knight, bishop, rook, or queen; other moves cannot promote.", nameof(move));
+        }
+
+        bool trackRepetition = controller != null && controller.gamestate == GameState.Playing;
+        if (trackRepetition && positionOccurrences.Count == 0)
+        {
+            RecordPosition();
         }
 
         Piece capturedPiece;
@@ -318,6 +328,103 @@ public class Board
                 whitePowerUp += 0.1f;
             }
         }
+
+        if (trackRepetition && controller.gamestate == GameState.Playing && RecordPosition() >= 3)
+        {
+            controller.gamestate = GameState.Draw;
+        }
+    }
+
+    private int RecordPosition()
+    {
+        string position = GetPositionKey();
+        int occurrences;
+        positionOccurrences.TryGetValue(position, out occurrences);
+        occurrences++;
+        positionOccurrences[position] = occurrences;
+        return occurrences;
+    }
+
+    private string GetPositionKey()
+    {
+        StringBuilder key = new();
+        key.Append((int)turn).Append('|').Append(firstMovesMade).Append('|');
+
+        for (int i = 0; i < tiles.Length; i++)
+        {
+            Piece piece = tiles[i];
+            key.Append((int)piece.type).Append(',')
+                .Append((int)piece.color).Append(',')
+                .Append(piece.poweredUp).Append(',')
+                .Append(piece.egg).Append(',');
+
+            if (piece.type == PieceType.King || i == 0 || i == 7 || i == 56 || i == 63)
+            {
+                key.Append(piece.moved);
+            }
+            key.Append(';');
+        }
+
+        key.Append((int)minerSituations[(int)ColorOfPiece.White]).Append(',')
+            .Append((int)minerSituations[(int)ColorOfPiece.Black]).Append('|');
+
+        if (HasEnPassantOpportunity())
+        {
+            key.Append(lastMove.prevTile).Append(',').Append(lastMove.currTile);
+        }
+
+        using (SHA512 sha512 = SHA512.Create())
+        {
+            return Convert.ToBase64String(sha512.ComputeHash(Encoding.UTF8.GetBytes(key.ToString())));
+        }
+    }
+
+    private bool HasEnPassantOpportunity()
+    {
+        if (lastMove.prevTile < 0 || lastMove.prevTile >= 64 ||
+            lastMove.currTile < 0 || lastMove.currTile >= 64 ||
+            lastMove.prevTile != lastMove.currTile + (turn == ColorOfPiece.White ? -16 : 16))
+        {
+            return false;
+        }
+
+        Piece movedPiece = tiles[lastMove.currTile];
+        if (movedPiece.type != PieceType.Pawn || movedPiece.color == turn)
+        {
+            return false;
+        }
+
+        int movedPawnFile = lastMove.currTile % 8;
+        int movedPawnRank = lastMove.currTile / 8;
+        for (int fileOffset = -1; fileOffset <= 1; fileOffset += 2)
+        {
+            int adjacentFile = movedPawnFile + fileOffset;
+            if (adjacentFile < 0 || adjacentFile >= 8)
+            {
+                continue;
+            }
+
+            Piece adjacentPiece = tiles[movedPawnRank * 8 + adjacentFile];
+            if (adjacentPiece.type == PieceType.Pawn && adjacentPiece.color == turn)
+            {
+                int targetRank = movedPawnRank + (turn == ColorOfPiece.White ? -1 : 1);
+                if (targetRank < 0 || targetRank >= 8)
+                {
+                    continue;
+                }
+
+                Piece targetPiece = tiles[targetRank * 8 + movedPawnFile];
+                if ((!adjacentPiece.poweredUp && targetPiece.CanBeMovedThrough() &&
+                     movedPawnRank == (turn == ColorOfPiece.White ? 3 : 4)) ||
+                    (adjacentPiece.poweredUp &&
+                     (targetPiece.CanBeMovedThrough() || targetPiece.color != turn)))
+                {
+                    return true;
+                }
+            }
+        }
+
+        return false;
     }
 
     public float AverageValue(Piece p1, Piece p2)
